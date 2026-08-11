@@ -26,7 +26,7 @@ def verileri_yukle():
         'gosterim_adi': [f"🌐 {ulke} (Milli Takım)" for ulke in milli_takimlar]
     })
     
-    # Sadece verisi olan oyuncuları tutuyoruz
+    # Sadece veritabanında aktif kaydı (maç/transfer/kulüp) olan oyuncuları alıyoruz
     aktif_p_ids = set(appearances['player_id'].dropna()).union(
         set(transfers['player_id'].dropna())
     ).union(set(players['current_club_id'].dropna()))
@@ -115,7 +115,7 @@ def oyunu_sifirla():
     st.session_state.p2_team = ""
     st.session_state.buzzer_winner = None
     st.session_state.user_tahmin = None
-    for key in ["p1_input", "p2_input", "game_predict_selectbox", "p_search_query", "game_search_query"]:
+    for key in ["p1_input", "p2_input", "game_predict_selectbox"]:
         if key in st.session_state:
             del st.session_state[key]
 
@@ -153,32 +153,23 @@ if ana_mod == "🔍 Sorgulama Modu":
 
     with sorgu_tab2:
         st.subheader("Oyuncunun Oynadığı Tüm Takımlar")
+        secilen_oyuncu = st.selectbox("Oyuncu İsmi Girin / Seçin", options=tum_oyuncular, index=None, placeholder="Örn: Mesut Özil...", key="sorgu_p_select")
         
-        # --- DONMAYI ÖNLEYEN DİNAMİK FİLTRELEME ---
-        arama_metni = st.text_input("🔍 Oyuncu Adını Yazın (En az 2 harf):", placeholder="Örn: Mesut, Ronaldo, Arda...", key="p_search_query")
-        
-        if len(arama_metni) >= 2:
-            filtrelenmis_oyuncular = [p for p in tum_oyuncular if arama_metni.lower() in p.lower()][:50]
-            
-            if filtrelenmis_oyuncular:
-                secilen_oyuncu = st.selectbox("Eşleşen Oyuncular Arasından Seçin:", options=filtrelenmis_oyuncular, key="sorgu_p_select")
-                
-                if st.button("Takımları Getir 🚀", type="primary", use_container_width=True):
-                    milli, kulupler = oyuncunun_takimlarini_getir(secilen_oyuncu)
-                    st.divider()
-                    st.write(f"### 👤 {secilen_oyuncu}")
-                    if milli:
-                        st.markdown(f"**🌐 {milli} (Milli Takım)**")
-                    st.write("**Oynadığı Kulüpler:**")
-                    if kulupler:
-                        for k in sorted(kulupler):
-                            st.write(f"• ⚽ {k}")
-                    else:
-                        st.write("*Kulüp kariyer bilgisi bulunamadı.*")
+        if st.button("Takımları Getir", type="primary", use_container_width=True, key="btn_sorgu_oyuncu"):
+            if secilen_oyuncu:
+                milli, kulupler = oyuncunun_takimlarini_getir(secilen_oyuncu)
+                st.divider()
+                st.write(f"### 👤 {secilen_oyuncu}")
+                if milli:
+                    st.markdown(f"**🌐 {milli} (Milli Takım)**")
+                st.write("**Oynadığı Kulüpler:**")
+                if kulupler:
+                    for k in sorted(kulupler):
+                        st.write(f"• ⚽ {k}")
+                else:
+                    st.write("*Kulüp kariyer bilgisi bulunamadı.*")
             else:
-                st.warning("Eşleşen oyuncu bulunamadı.")
-        else:
-            st.info("💡 Arama yapabilmek için yukarıya en az 2 harf yazın.")
+                st.info("Lütfen bir oyuncu seçin.")
 
 # ==========================================
 # 2. OYUN MODU (1v1 SPLIT SCREEN)
@@ -259,29 +250,30 @@ else:
             st.session_state.game_step = "result_pas"
             st.rerun()
 
-    # --- ADIM 5: OYUNCU İSMİ SEÇİM EKRANI (HIZLANDIRILDI) ---
+    # --- ADIM 5: OYUNCU İSMİ SEÇİM EKRANI ---
     elif st.session_state.game_step == "answer":
         winner = st.session_state.buzzer_winner
         t1 = st.session_state.p1_team
         t2 = st.session_state.p2_team
         
         st.success(f"🔔 **İlk tıklayan: {winner}!**")
-        st.write(f"**{t1}** ve **{t2}** takımlarında oynamış bir futbolcu yazın:")
+        st.write(f"**{t1}** ve **{t2}** takımlarında oynamış bir futbolcu seçin/yazın:")
         
-        game_search = st.text_input("🔍 Oyuncu Adını Yazın (En az 2 harf):", placeholder="Örn: Cristiano, Alex...", key="game_search_query")
+        tahmin_oyuncu = st.selectbox(
+            "Oyuncu İsmi Girin / Seçin:",
+            options=tum_oyuncular,
+            index=None,
+            placeholder="Örn: Mesut Özil...",
+            key="game_predict_selectbox"
+        )
         
-        if len(game_search) >= 2:
-            game_filtered = [p for p in tum_oyuncular if game_search.lower() in p.lower()][:50]
-            if game_filtered:
-                tahmin_oyuncu = st.selectbox("Eşleşen Oyuncular:", options=game_filtered, key="game_predict_selectbox")
-                if st.button("Cevabı Gönder 🎯", type="primary"):
-                    st.session_state.user_tahmin = tahmin_oyuncu
-                    st.session_state.game_step = "result_answer"
-                    st.rerun()
+        if st.button("Cevabı Gönder 🎯", type="primary"):
+            if tahmin_oyuncu:
+                st.session_state.user_tahmin = tahmin_oyuncu
+                st.session_state.game_step = "result_answer"
+                st.rerun()
             else:
-                st.warning("Eşleşen oyuncu bulunamadı.")
-        else:
-            st.info("💡 Arama yapabilmek için yukarıya en az 2 harf yazın.")
+                st.warning("Lütfen bir oyuncu ismi seçin veya yazın.")
 
     # --- ADIM 6A: CEVAP SONUÇ EKRANI ---
     elif st.session_state.game_step == "result_answer":
