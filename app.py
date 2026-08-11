@@ -9,24 +9,24 @@ st.set_page_config(page_title="Futbol Ortak Oyuncu Bulucu & Oyun", page_icon="�
 # --- 1. VERİLERİ YÜKLEME VE BİÇİMLENDİRME ---
 @st.cache_data
 def verileri_yukle():
-    clubs = pd.read_csv('clubs.csv')
-    players = pd.read_csv('players.csv')
+    clubs = pd.read_csv('clubs.csv', usecols=['club_id', 'name', 'domestic_competition_id'])
+    players = pd.read_csv('players.csv', usecols=['player_id', 'name', 'current_club_id', 'country_of_citizenship'])
     
     if os.path.exists('transfers.csv'):
-        transfers = pd.read_csv('transfers.csv')
+        transfers = pd.read_csv('transfers.csv', usecols=['player_id', 'from_club_id', 'to_club_id']).drop_duplicates()
     else:
         transfers = pd.DataFrame(columns=['player_id', 'from_club_id', 'to_club_id'])
         
     if os.path.exists('appearances.csv'):
-        appearances = pd.read_csv('appearances.csv', usecols=['player_id', 'player_club_id'])
+        appearances = pd.read_csv('appearances.csv', usecols=['player_id', 'player_club_id']).drop_duplicates()
     else:
         appearances = pd.DataFrame(columns=['player_id', 'player_club_id'])
     
+    # LİG KISALTMALARI
     lig_kisaltmalari = {
         'GB1': 'PL', 'ES1': 'LL', 'TR1': 'SL',
         'IT1': 'SA', 'L1': 'BL', 'FR1': 'L1'
     }
-    
     clubs['lig_kod'] = clubs['domestic_competition_id'].map(lig_kisaltmalari).fillna(clubs['domestic_competition_id'])
     clubs['gosterim_adi'] = clubs.apply(lambda row: f"⚽ {row['name']} [{row['lig_kod']}]", axis=1)
     
@@ -36,11 +36,21 @@ def verileri_yukle():
         'gosterim_adi': [f"🌐 {ulke} (Milli Takım)" for ulke in milli_takimlar]
     })
     
-    return clubs, players, transfers, appearances, milli_df
+    # --- KRİTİK PERFORMANS FİLTRESİ ---
+    # Sadece veritabanında maçı, transferi veya takımı olan aktif oyuncuları filtreliyoruz.
+    # Bu işlem 60.000+ elemanlı listeyi küçülterek selectbox donmasını tamamen bitirir.
+    aktif_p_ids = set(appearances['player_id'].dropna()).union(
+        set(transfers['player_id'].dropna())
+    ).union(set(players['current_club_id'].dropna()))
+    
+    filtered_players = players[players['player_id'].isin(aktif_p_ids)].dropna(subset=['name'])
+    
+    tum_secenekler = sorted(list(clubs['gosterim_adi'].dropna()) + list(milli_df['gosterim_adi'].dropna()))
+    tum_oyuncular = sorted(filtered_players['name'].unique().tolist())
+    
+    return clubs, players, transfers, appearances, milli_df, tum_secenekler, tum_oyuncular
 
-clubs, players, transfers, appearances, milli_df = verileri_yukle()
-tum_secenekler = sorted(list(clubs['gosterim_adi'].dropna()) + list(milli_df['gosterim_adi'].dropna()))
-tum_oyuncular = sorted(players['name'].dropna().unique().tolist())
+clubs, players, transfers, appearances, milli_df, tum_secenekler, tum_oyuncular = verileri_yukle()
 
 # --- YARDIMCI GELİŞMİŞ SORGULAR ---
 def temiz_isim_al(gosterim):
@@ -74,15 +84,16 @@ def bir_takimin_tum_oyuncularini_getir(takim_veya_ulke_adi):
     return set()
 
 def oyuncunun_takimlarini_getir(oyuncu_adi):
-    p_row = players[players['name'].str.lower() == oyuncu_adi.lower()]
-    if p_row.empty:
+    p_rows = players[players['name'] == oyuncu_adi]
+    if p_rows.empty:
         return None, []
     
-    p_id = p_row['player_id'].values[0]
-    milli = p_row['country_of_citizenship'].values[0]
+    p_row = p_rows.iloc[0]
+    p_id = p_row['player_id']
+    milli = p_row['country_of_citizenship']
     kulup_idleri = set()
     
-    curr_c = p_row['current_club_id'].values[0]
+    curr_c = p_row['current_club_id']
     if pd.notna(curr_c) and curr_c != -1:
         kulup_idleri.add(int(curr_c))
         
@@ -119,7 +130,6 @@ def oyunu_sifirla():
     for key in ["p1_input", "p2_input", "game_predict_selectbox"]:
         if key in st.session_state:
             del st.session_state[key]
-
 
 # --- ANA MOD SEÇİMİ ---
 ana_mod = st.radio("Lütfen Mod Seçin:", ["🔍 Sorgulama Modu", "🎮 1v1 Oyun Modu"], horizontal=True)
@@ -290,8 +300,8 @@ else:
             st.balloons()
             st.success(f"🎉 **DOĞRU CEVAP!** ({tahmin}) - {winner} puanı kazandı!")
         else:
-            diğer_oyuncu = "2. Oyuncu" if winner == "1. Oyuncu" else "1. Oyuncu"
-            st.error(f"❌ **YANLIŞ CEVAP!** {tahmin}, bu iki takımda da ortak oynamamış. Sıra **{diğer_oyuncu}** tarafına geçti.")
+            diger_oyuncu = "2. Oyuncu" if winner == "1. Oyuncu" else "1. Oyuncu"
+            st.error(f"❌ **YANLIŞ CEVAP!** {tahmin}, bu iki takımda da ortak oynamamış. Sıra **{diger_oyuncu}** tarafına geçti.")
         
         st.divider()
         st.write(f"**{t1}** ve **{t2}** Ortak Oyuncuları ({len(dogru_cevaplar)} kişi):")
