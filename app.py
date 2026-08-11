@@ -12,21 +12,11 @@ def verileri_yukle():
     clubs = pd.read_csv('clubs.csv', usecols=['club_id', 'name', 'domestic_competition_id'])
     players = pd.read_csv('players.csv', usecols=['player_id', 'name', 'current_club_id', 'country_of_citizenship'])
     
-    if os.path.exists('transfers.csv'):
-        transfers = pd.read_csv('transfers.csv', usecols=['player_id', 'from_club_id', 'to_club_id']).drop_duplicates()
-    else:
-        transfers = pd.DataFrame(columns=['player_id', 'from_club_id', 'to_club_id'])
-        
-    if os.path.exists('appearances.csv'):
-        appearances = pd.read_csv('appearances.csv', usecols=['player_id', 'player_club_id']).drop_duplicates()
-    else:
-        appearances = pd.DataFrame(columns=['player_id', 'player_club_id'])
+    transfers = pd.read_csv('transfers.csv', usecols=['player_id', 'from_club_id', 'to_club_id']).drop_duplicates() if os.path.exists('transfers.csv') else pd.DataFrame()
+    appearances = pd.read_csv('appearances.csv', usecols=['player_id', 'player_club_id']).drop_duplicates() if os.path.exists('appearances.csv') else pd.DataFrame()
     
     # LİG KISALTMALARI
-    lig_kisaltmalari = {
-        'GB1': 'PL', 'ES1': 'LL', 'TR1': 'SL',
-        'IT1': 'SA', 'L1': 'BL', 'FR1': 'L1'
-    }
+    lig_kisaltmalari = {'GB1': 'PL', 'ES1': 'LL', 'TR1': 'SL', 'IT1': 'SA', 'L1': 'BL', 'FR1': 'L1'}
     clubs['lig_kod'] = clubs['domestic_competition_id'].map(lig_kisaltmalari).fillna(clubs['domestic_competition_id'])
     clubs['gosterim_adi'] = clubs.apply(lambda row: f"⚽ {row['name']} [{row['lig_kod']}]", axis=1)
     
@@ -36,9 +26,7 @@ def verileri_yukle():
         'gosterim_adi': [f"🌐 {ulke} (Milli Takım)" for ulke in milli_takimlar]
     })
     
-    # --- KRİTİK PERFORMANS FİLTRESİ ---
-    # Sadece veritabanında maçı, transferi veya takımı olan aktif oyuncuları filtreliyoruz.
-    # Bu işlem 60.000+ elemanlı listeyi küçülterek selectbox donmasını tamamen bitirir.
+    # Sadece verisi olan oyuncuları tutarak listeyi hafifletiyoruz
     aktif_p_ids = set(appearances['player_id'].dropna()).union(
         set(transfers['player_id'].dropna())
     ).union(set(players['current_club_id'].dropna()))
@@ -143,13 +131,16 @@ if ana_mod == "🔍 Sorgulama Modu":
     
     with sorgu_tab1:
         st.subheader("İki Takım / Ülke Arasındaki Ortak Oyuncular")
-        col1, col2 = st.columns(2)
-        with col1:
-            secim1 = st.selectbox("1. Takım / Ülke", options=tum_secenekler, index=None, placeholder="1. Takım seçin...", key="sorgu_t1")
-        with col2:
-            secim2 = st.selectbox("2. Takım / Ülke", options=tum_secenekler, index=None, placeholder="2. Takım seçin...", key="sorgu_t2")
+        with st.form("form_kulup_sorgu"):
+            col1, col2 = st.columns(2)
+            with col1:
+                secim1 = st.selectbox("1. Takım / Ülke", options=tum_secenekler, index=None, placeholder="1. Takım seçin...", key="sorgu_t1")
+            with col2:
+                secim2 = st.selectbox("2. Takım / Ülke", options=tum_secenekler, index=None, placeholder="2. Takım seçin...", key="sorgu_t2")
+                
+            btn_sorgu = st.form_submit_button("Ortak Oyunculari Getir", type="primary", use_container_width=True)
             
-        if st.button("Ortak Oyuncuları Getir", type="primary", use_container_width=True, key="btn_sorgu_kulup"):
+        if btn_sorgu:
             if not secim1 or not secim2:
                 st.info("Lütfen her iki kutudan da seçim yapın.")
             else:
@@ -165,9 +156,11 @@ if ana_mod == "🔍 Sorgulama Modu":
 
     with sorgu_tab2:
         st.subheader("Oyuncunun Oynadığı Tüm Takımlar")
-        secilen_oyuncu = st.selectbox("Oyuncu İsmi Girin / Seçin", options=tum_oyuncular, index=None, placeholder="Örn: Mesut Özil...", key="sorgu_p_select")
-        
-        if st.button("Takımları Getir", type="primary", use_container_width=True, key="btn_sorgu_oyuncu"):
+        with st.form("form_oyuncu_sorgu"):
+            secilen_oyuncu = st.selectbox("Oyuncu İsmi Girin / Seçin", options=tum_oyuncular, index=None, placeholder="Örn: Mesut Özil...", key="sorgu_p_select")
+            btn_oyuncu = st.form_submit_button("Takımları Getir", type="primary", use_container_width=True)
+            
+        if btn_oyuncu:
             if secilen_oyuncu:
                 milli, kulupler = oyuncunun_takimlarini_getir(secilen_oyuncu)
                 st.divider()
@@ -203,9 +196,11 @@ else:
     # --- ADIM 1: 1. OYUNCU TAKIM SEÇİMİ ---
     if st.session_state.game_step == "p1_select":
         st.info("👤 **1. Oyuncu:** Lütfen takımınızı seçin (İkinci oyuncu bakmasın!)")
-        p1_sel = st.selectbox("1. Oyuncunun Takımı", options=tum_secenekler, index=None, placeholder="Takım seç...", key="p1_input")
-        
-        if st.button("1. Takımı Onayla ve Gizle 🔒", type="primary"):
+        with st.form("form_p1"):
+            p1_sel = st.selectbox("1. Oyuncunun Takımı", options=tum_secenekler, index=None, placeholder="Takım seç...", key="p1_input")
+            btn_p1 = st.form_submit_button("1. Takımı Onayla ve Gizle 🔒", type="primary")
+            
+        if btn_p1:
             if p1_sel:
                 st.session_state.p1_team = temiz_isim_al(p1_sel)
                 st.session_state.game_step = "p2_select"
@@ -216,9 +211,11 @@ else:
     # --- ADIM 2: 2. OYUNCU TAKIM SEÇİMİ ---
     elif st.session_state.game_step == "p2_select":
         st.info("👤 **2. Oyuncu:** Lütfen takımınızı seçin!")
-        p2_sel = st.selectbox("2. Oyuncunun Takımı", options=tum_secenekler, index=None, placeholder="Takım seç...", key="p2_input")
-        
-        if st.button("2. Takımı Onayla ve Oyunu Başlat 🚀", type="primary"):
+        with st.form("form_p2"):
+            p2_sel = st.selectbox("2. Oyuncunun Takımı", options=tum_secenekler, index=None, placeholder="Takım seç...", key="p2_input")
+            btn_p2 = st.form_submit_button("2. Takımı Onayla ve Oyunu Başlat 🚀", type="primary")
+            
+        if btn_p2:
             if p2_sel:
                 st.session_state.p2_team = temiz_isim_al(p2_sel)
                 st.session_state.game_step = "countdown"
@@ -271,15 +268,17 @@ else:
         st.success(f"🔔 **İlk tıklayan: {winner}!**")
         st.write(f"**{t1}** ve **{t2}** takımlarında oynamış bir futbolcu seçin/yazın:")
         
-        tahmin_oyuncu = st.selectbox(
-            "Oyuncu İsmi Girin / Seçin:",
-            options=tum_oyuncular,
-            index=None,
-            placeholder="Örn: Mesut Özil...",
-            key="game_predict_selectbox"
-        )
+        with st.form("form_game_predict"):
+            tahmin_oyuncu = st.selectbox(
+                "Oyuncu İsmi Girin / Seçin:",
+                options=tum_oyuncular,
+                index=None,
+                placeholder="Örn: Mesut Özil...",
+                key="game_predict_selectbox"
+            )
+            btn_answer = st.form_submit_button("Cevabı Gönder 🎯", type="primary")
         
-        if st.button("Cevabı Gönder 🎯", type="primary"):
+        if btn_answer:
             if tahmin_oyuncu:
                 st.session_state.user_tahmin = tahmin_oyuncu
                 st.session_state.game_step = "result_answer"
