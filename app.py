@@ -12,6 +12,9 @@ def verileri_yukle():
     clubs = pd.read_csv('clubs.csv', usecols=['club_id', 'name', 'domestic_competition_id'])
     players = pd.read_csv('players.csv', usecols=['player_id', 'name', 'current_club_id', 'country_of_citizenship'])
     
+    # 'Turkey' ve 'Türkiye' İSİMLERİNİ BİRLEŞTİRME
+    players['country_of_citizenship'] = players['country_of_citizenship'].replace({'Turkey': 'Türkiye'})
+    
     transfers = pd.read_csv('transfers.csv', usecols=['player_id', 'from_club_id', 'to_club_id']).drop_duplicates() if os.path.exists('transfers.csv') else pd.DataFrame()
     appearances = pd.read_csv('appearances.csv', usecols=['player_id', 'player_club_id']).drop_duplicates() if os.path.exists('appearances.csv') else pd.DataFrame()
     
@@ -26,7 +29,7 @@ def verileri_yukle():
         'gosterim_adi': [f"🌐 {ulke} (Milli Takım)" for ulke in milli_takimlar]
     })
     
-    # Sadece veritabanında aktif kaydı (maç/transfer/kulüp) olan oyuncuları alıyoruz
+    # Sadece veritabanında aktif kaydı olan oyuncuları tutuyoruz
     aktif_p_ids = set(appearances['player_id'].dropna()).union(
         set(transfers['player_id'].dropna())
     ).union(set(players['current_club_id'].dropna()))
